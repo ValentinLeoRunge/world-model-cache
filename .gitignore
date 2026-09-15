@@ -1,0 +1,52 @@
+# Generated files
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+*.egg
+.eggs/
+dist/
+build/
+
+# IDE & editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Claude Code local settings (personal tool permissions, not project config)
+.claude/settings.local.json
+
+# Environment
+venv/
+myenv/
+.env
+.env.local
+
+# Experiment tracking
+wandb/
+
+# Project outputs
+*.pt
+*.pth
+*.pkl
+checkpoints/
+logs/
+outputs/
+results/
+
+# Notebooks
+.ipynb_checkpoints/
+*.ipynb_bak
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code documentation
+CLAUDE.md
+
+# Data (never commit datasets - GitHub blocks files over 100MB and clones bloat)
+data/
+
