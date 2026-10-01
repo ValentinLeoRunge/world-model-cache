@@ -1,16 +1,3 @@
-"""Freeze a trained tokenizer and encode every episode into discrete tokens.
-
-For each data/<split>/<stem>.npz -> data/tokens/<split>/<stem>.npz containing:
-  tokens : (T, 16) uint8   -- one code per 4x4 latent cell, row-major
-  <every non-image field copied through unchanged: agent_pos, agent_dir,
-   action, maze_layout, reward, terminal, reset, target_*, ...>
-
-Resume-safe: an existing output is skipped unless --overwrite.
-
-  python -m src.tokenize_dataset --ckpt checkpoints/tokenizer/latest.pt
-Smoke test (blueprint #5): add --limit 5
-"""
-
 import argparse
 import glob
 import os
@@ -19,7 +6,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from src.models.vqvae import VQVAE
+from src.models.tokenizer import Tokenizer
 
 
 @torch.no_grad()
@@ -49,7 +36,7 @@ def main():
     args = p.parse_args()
 
     ckpt = torch.load(args.ckpt, map_location=args.device, weights_only=False)
-    model = VQVAE().to(args.device)
+    model = Tokenizer().to(args.device)
     model.load_state_dict(ckpt["model"])
     model.eval()
     print(f"loaded {args.ckpt} (step {ckpt.get('step', '?')}) on {args.device}")

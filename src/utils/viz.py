@@ -1,13 +1,5 @@
-"""Save an originals-vs-reconstructions grid as a PNG for visual sign-off.
-
-The recognizability of these grids is the tokenizer's real exit criterion
-(see blueprints/TOKENIZER.md), so this stays deliberately plain.
-"""
-
 import os
-
 import numpy as np
-
 import matplotlib
 
 matplotlib.use("Agg")  # headless: write files, never open a window
@@ -15,15 +7,10 @@ import matplotlib.pyplot as plt
 
 
 def _to_hwc(x):
-    """(B, 3, H, W) tensor in [0, 1] -> (B, H, W, 3) numpy, clamped."""
     return x.detach().float().clamp(0, 1).cpu().permute(0, 2, 3, 1).numpy()
 
 
 def save_recon_grid(originals, recons, path, n=8, title=None):
-    """Top row original, bottom row reconstruction, `n` columns.
-
-    originals, recons: (B, 3, 64, 64) float tensors in [0, 1].
-    """
     n = min(n, originals.shape[0])
     orig, rec = _to_hwc(originals[:n]), _to_hwc(recons[:n])
 
@@ -47,13 +34,6 @@ def save_recon_grid(originals, recons, path, n=8, title=None):
 
 
 def save_path_strip(rows, path, row_labels, col_labels=None, highlight_col=None, title=None):
-    """Generalization of save_recon_grid: arbitrary number of rows, one column
-    per timestep instead of per batch-sample. Used by the path-inspection
-    notebook (blueprints/WORLDMODEL.md, Qualitative Path Inspection).
-
-    rows: list of (n_cols, 3, 64, 64) float tensors in [0, 1], one per row.
-    highlight_col: column index to outline in red (e.g. the revisit moment).
-    """
     n_cols = rows[0].shape[0]
     imgs = [_to_hwc(r) for r in rows]
 
@@ -83,47 +63,12 @@ def save_path_strip(rows, path, row_labels, col_labels=None, highlight_col=None,
 
 
 def _upscale_nn(imgs, factor):
-    """(T, H, W, 3) uint8 -> (T, H*factor, W*factor, 3) uint8, nearest-neighbor.
-
-    Encoding tiny 64x64 frames as-is lets H.264 chroma subsampling blur a
-    disproportionate fraction of the image (see _write_mp4). Upscaling first
-    makes each subsampled chroma "pixel" cover a much larger, usually
-    still-flat, region -- error at native resolution drops from ~29/255^2 to
-    ~2.5/255^2. 4x is the point of diminishing returns (8x barely improves it
-    further).
-    """
     if factor <= 1:
         return imgs
     return imgs.repeat(factor, axis=1).repeat(factor, axis=2)
 
 
 def _write_mp4(imgs, path, fps):
-    """(T, H, W, 3) uint8 -> .mp4 at `path`.
-
-    yuv420p, not yuv444p: yuv444p (full chroma resolution) is losslessly
-    sharp, but it's H.264's "4:4:4 Predictive" profile, which common players
-    (Windows' built-in one included) refuse to open at all -- a compatibility
-    wall, not a quality tradeoff. Plain yuv420p is what actually plays
-    everywhere.
-
-    crf=1, not crf=0: crf=0 (true lossless) makes libx264 signal "High 4:4:4
-    Predictive" profile in the bitstream regardless of pixel format -- so
-    even with yuv420p set, the encoded profile silently stayed 4:4:4 and hit
-    the exact same wall as above (confirmed with ffprobe). crf=1 is the
-    smallest step that keeps the encoder on plain "High" profile; the quality
-    cost is negligible (MSE ~2.56 vs ~2.54 on a 0-255^2 scale, both already
-    near the yuv420p+upscale floor from chroma subsampling).
-
-    -movflags +faststart: without it, ffmpeg writes the `moov` atom (the
-    index a player needs to seek/play at all) at the *end* of the file. Some
-    players tolerate that; Windows' built-in one does not -- it reports the
-    correct duration (read from a separate scan) but then shows black and
-    jumps straight to the end, unable to actually play it. faststart moves
-    `moov` to the front in a fast second pass after encoding.
-
-    Lazy-imports imageio so the plain grid/plot functions above don't pull in
-    a video dependency for callers that never save one.
-    """
     import imageio  # needs imageio-ffmpeg installed for mp4 writing
 
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
@@ -132,7 +77,6 @@ def _write_mp4(imgs, path, fps):
 
 
 def save_video(frames, path, fps=8, upscale=4):
-    """(T, 3, 64, 64) float tensor in [0, 1] -> .mp4 at `path`, frames in order."""
     imgs = (_to_hwc(frames) * 255).astype("uint8")  # (T, H, W, 3) uint8
     imgs = _upscale_nn(imgs, upscale)
     _write_mp4(imgs, path, fps)
@@ -140,10 +84,6 @@ def save_video(frames, path, fps=8, upscale=4):
 
 def save_side_by_side_video(left, right, path, left_label=None, right_label=None,
                             fps=8, upscale=4):
-    """Two (T, 3, 64, 64) float tensors in [0, 1], same T -> one .mp4, left
-    half `left`'s frames, right half `right`'s, divided by a thin white line.
-    Optional text burned into the top-left corner of each half.
-    """
     from PIL import Image, ImageDraw
 
     left_imgs = _upscale_nn((_to_hwc(left) * 255).astype("uint8"), upscale)

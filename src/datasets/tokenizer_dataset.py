@@ -20,7 +20,7 @@ import torch
 from torch.utils.data import IterableDataset, get_worker_info
 
 
-class EpisodeFrameDataset(IterableDataset):
+class TokenizerDataset(IterableDataset):
     """Yields single frames as float32 tensors (3, 64, 64) in [0, 1]."""
 
     def __init__(self, root, split="train0", frame_stride=4,

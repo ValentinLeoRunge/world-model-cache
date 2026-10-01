@@ -1,17 +1,3 @@
-"""Train the VQ-VAE tokenizer on Memory-Maze frames.
-
-Loss = MSE(input, recon) + commitment loss (the vq_loss returned by the model;
-the codebook itself is updated by EMA, not by this optimizer).
-
-Artifacts, relative to --out_dir:
-  checkpoints/tokenizer/step_XXXXXX.pt   every --ckpt_every steps (+ latest.pt)
-  outputs/tokenizer/step_XXXXXX.png      every --viz_every steps, on a fixed
-                                         held-out batch from the eval split
-
-Smoke test (blueprint #3):
-  python -m src.train_tokenizer --episodes_limit 20 --max_steps 200 --batch_size 32
-"""
-
 import argparse
 import math
 import os
@@ -21,8 +7,8 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.datasets.episode_dataset import EpisodeFrameDataset
-from src.models.vqvae import VQVAE
+from src.datasets.tokenizer_dataset import TokenizerDataset
+from src.models.tokenizer import Tokenizer
 from src.utils.viz import save_recon_grid
 
 
@@ -51,15 +37,13 @@ def parse_args():
 
 
 def infinite(loader):
-    """Yield batches forever; each epoch respawns workers -> fresh shuffle."""
     while True:
         for batch in loader:
             yield batch
 
 
 def fixed_viz_batch(args):
-    """A held-out batch from the eval split, grabbed once and reused every viz."""
-    ds = EpisodeFrameDataset(
+    ds = TokenizerDataset(
         args.data_root, split="eval", frame_stride=args.frame_stride,
         shuffle_buffer=4, episodes_limit=4, seed=args.seed,
     )
@@ -77,7 +61,7 @@ def main():
     os.makedirs(ckpt_dir, exist_ok=True)
     os.makedirs(viz_dir, exist_ok=True)
 
-    train_ds = EpisodeFrameDataset(
+    train_ds = TokenizerDataset(
         args.data_root, split=args.split, frame_stride=args.frame_stride,
         shuffle_buffer=args.shuffle_buffer, episodes_limit=args.episodes_limit,
         seed=args.seed,
@@ -90,7 +74,7 @@ def main():
 
     viz_batch = fixed_viz_batch(args).to(args.device)
 
-    model = VQVAE().to(args.device)
+    model = Tokenizer().to(args.device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     start_step = 0

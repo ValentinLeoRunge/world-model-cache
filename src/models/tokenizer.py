@@ -1,18 +1,9 @@
-"""VQ-VAE tokenizer: 64x64 RGB frame -> 4x4 grid of discrete codes (16 tokens).
-
-One model, three parts: Encoder (conv downsample), EMAVectorQuantizer (codebook,
-updated by exponential moving average -- no gradients), Decoder (conv upsample).
-See blueprints/TOKENIZER.md.
-"""
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 class ResBlock(nn.Module):
-    """3x3 -> 3x3 conv pair with a skip connection, channels unchanged."""
-
     def __init__(self, ch):
         super().__init__()
         self.body = nn.Sequential(
@@ -27,8 +18,6 @@ class ResBlock(nn.Module):
 
 
 class Encoder(nn.Module):
-    """(B,3,64,64) -> (B,D,4,4).  Four stride-2 convs + 2 res blocks + 1x1 to D."""
-
     def __init__(self, d=64):
         super().__init__()
         self.net = nn.Sequential(
@@ -50,8 +39,6 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    """(B,D,4,4) -> (B,3,64,64) in [0,1].  Mirror of the encoder."""
-
     def __init__(self, d=64):
         super().__init__()
         self.net = nn.Sequential(
@@ -74,13 +61,6 @@ class Decoder(nn.Module):
 
 
 class EMAVectorQuantizer(nn.Module):
-    """Nearest-neighbour codebook lookup with straight-through gradients.
-
-    The codebook lives in buffers and is updated by EMA (online k-means), never
-    by the optimizer. Only the commitment loss beta * ||z_e - sg(z_q)||^2 is
-    returned for backprop (it trains the encoder).
-    """
-
     def __init__(self, k=256, d=64, beta=0.25, decay=0.99, eps=1e-5,
                  dead_threshold=1.0, revive_every=100):
         super().__init__()
@@ -145,7 +125,7 @@ class EMAVectorQuantizer(nn.Module):
         return z_q, loss, idx.view(b, h, w), perplexity
 
 
-class VQVAE(nn.Module):
+class Tokenizer(nn.Module):
     def __init__(self, k=256, d=64, beta=0.25, decay=0.99):
         super().__init__()
         self.encoder = Encoder(d)
@@ -153,7 +133,6 @@ class VQVAE(nn.Module):
         self.decoder = Decoder(d)
 
     def forward(self, x):
-        """-> recon (B,3,64,64), vq_loss scalar, indices (B,4,4), perplexity."""
         z_e = self.encoder(x)
         z_q, vq_loss, idx, perplexity = self.vq(z_e)
         recon = self.decoder(z_q)
@@ -161,27 +140,17 @@ class VQVAE(nn.Module):
 
     @torch.no_grad()
     def encode_indices(self, x):
-        """(B,3,64,64) -> (B,4,4) long code indices. Encoder + VQ only, no decoder."""
         _, _, idx, _ = self.vq(self.encoder(x))
         return idx
 
     @torch.no_grad()
     def tokenize(self, x):
-        """(B,3,64,64) -> (B,16) uint8 code indices, row-major over the 4x4 grid."""
         return self.encode_indices(x).reshape(x.shape[0], -1).to(torch.uint8)
 
     @torch.no_grad()
     def decode_indices(self, idx):
-        """(B,16) or (B,4,4) int -> reconstructed images (B,3,64,64) in [0,1]."""
         if idx.dim() == 2:
             idx = idx.view(idx.shape[0], 4, 4)
         z_q = F.embedding(idx.long(), self.vq.embedding)      # (B,4,4,D)
         z_q = z_q.permute(0, 3, 1, 2).contiguous()
         return self.decoder(z_q)
-
-
-
-#
-# 3x64x64
-
-
