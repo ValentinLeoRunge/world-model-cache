@@ -10,11 +10,14 @@ class Cache:
         self.store = []  # (tokens (16,), pos (2,), dir (2,)), oldest first
 
     # simple update method
-    def update(self, tokens, pos, dir_, r_ins=0.5):
+    def update(self, tokens, pos, dir_, r_ins=0.5, cos_ins=0.7):
+        # skip only if a held snapshot shows the same view: same place AND same heading
         if self.store:
-            held = np.stack([e[1] for e in self.store])
-            if np.linalg.norm(held - pos[0], axis=1).min() < r_ins:
-                    return
+            held_pos = np.stack([e[1] for e in self.store])
+            held_dir = np.stack([e[2] for e in self.store])
+            same = (np.linalg.norm(held_pos - pos[0], axis=1) < r_ins) & (held_dir @ dir_[0] > cos_ins)
+            if same.any():
+                return
         if len(self.store) == self.size:
             self.store.pop(0)
         self.store.append((tokens[0], pos[0], dir_[0]))
